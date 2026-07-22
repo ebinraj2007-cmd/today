@@ -146,14 +146,28 @@
     transition:background .2s,color .2s}
   .tab.active{background:var(--panel-2); color:var(--text)}
 
-  /* ---- month view ---- */
-  #monthView{display:none}
+  /* ---- month + tomorrow views ---- */
+  #monthView, #tomorrowView{display:none}
   body.month-mode .clock,
   body.month-mode #progressPanel,
   body.month-mode #listArea,
   body.month-mode .controls,
-  body.month-mode #alarmHint{display:none}
+  body.month-mode #alarmHint,
+  body.tomorrow-mode .clock,
+  body.tomorrow-mode #progressPanel,
+  body.tomorrow-mode #listArea,
+  body.tomorrow-mode .controls,
+  body.tomorrow-mode #alarmHint{display:none}
   body.month-mode #monthView{display:block}
+  body.tomorrow-mode #tomorrowView{display:block}
+
+  .tmr-head{background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:16px; margin:16px 0; text-align:center}
+  .tmr-head h2{margin:0 0 4px; font-size:19px}
+  .tmr-head p{margin:0; color:var(--text-2); font-size:13px}
+  .task.preview{cursor:default}
+  .task.preview:active{transform:none}
+  .task.preview .box{border-color:var(--line); opacity:.4}
 
   .month-head{display:flex; align-items:center; justify-content:space-between; margin:16px 0 12px}
   .month-head h2{margin:0; font-size:19px}
@@ -197,7 +211,8 @@
 
   <div class="tabs">
     <button class="tab active" data-view="today">Today</button>
-    <button class="tab" data-view="month">This Month</button>
+    <button class="tab" data-view="tomorrow">Tomorrow</button>
+    <button class="tab" data-view="month">Month</button>
   </div>
 
   <div class="clock">
@@ -244,6 +259,15 @@
   <div class="hint" id="alarmHint">
     Alarms ring while this app is open. On iPhone, add it to your Home Screen and keep it
     open in the morning. For wake-up (7:00) and wind-down (10:30pm), also set a backup in the Clock app.
+  </div>
+
+  <!-- ===== tomorrow view ===== -->
+  <div id="tomorrowView">
+    <div class="tmr-head">
+      <h2 id="tmrTitle">Tomorrow</h2>
+      <p id="tmrSub">—</p>
+    </div>
+    <div id="tmrList"></div>
   </div>
 
   <!-- ===== month view ===== -->
@@ -846,14 +870,49 @@ function renderMonth(){
   $("monthHint").textContent=msg;
 }
 
+// ---- tomorrow view --------------------------------------------------
+// A read-only look at the next day. Exists because the 11pm task asks you to
+// set tomorrow's priority — which you can't do without seeing tomorrow.
+function renderTomorrow(){
+  const d=new Date(); d.setDate(d.getDate()+1);
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  $("tmrTitle").textContent=`${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+
+  const plan=planFor(d.getDay());
+  if(!plan){
+    $("tmrSub").textContent="Rest day — nothing scheduled.";
+    $("tmrList").innerHTML=`<div class="rest"><div class="big">🕊️</div>
+      <h2>Rest day</h2><p>Tomorrow is yours. No work, no commits.</p></div>`;
+    return;
+  }
+  const alarms=plan.filter(x=>x.alarm);
+  $("tmrSub").textContent=`${plan.length} items · ${alarms.length} alarms · first at ${to12(plan[0].t).str}`;
+
+  $("tmrList").innerHTML=`<ul class="tasks"></ul>`;
+  const ul=$("tmrList").querySelector("ul");
+  plan.forEach(it=>{
+    const li=document.createElement("li");
+    li.className="task preview";
+    li.innerHTML=`
+      <span class="time">${to12(it.t).str}</span>
+      <span class="box"></span>
+      <span class="label">${escapeHtml(it.label)}${it.note?`<small>${escapeHtml(it.note)}</small>`:""}</span>
+      ${it.tag?`<span class="tag">${it.tag}</span>`:""}`;
+    ul.appendChild(li);
+  });
+}
+
 // ---- tabs -----------------------------------------------------------
 document.querySelectorAll(".tab").forEach(t=>{
   t.onclick=()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
-    const month = t.dataset.view==="month";
-    document.body.classList.toggle("month-mode", month);
-    if(month){ monthOffset=0; renderMonth(); }
+    const view=t.dataset.view;
+    document.body.classList.toggle("month-mode", view==="month");
+    document.body.classList.toggle("tomorrow-mode", view==="tomorrow");
+    if(view==="month"){ monthOffset=0; renderMonth(); }
+    if(view==="tomorrow"){ renderTomorrow(); }
   };
 });
 $("mPrev").onclick=()=>{ monthOffset--; renderMonth(); };
